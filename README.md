@@ -34,3 +34,7 @@ This chatbot uses:
 - Gradio
 - OpenRouter
 - Lightweight RAG
+
+Last updated: May 22
+
+Updated today
