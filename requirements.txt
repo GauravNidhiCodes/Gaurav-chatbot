@@ -1,0 +1,4 @@
+gradio==6.14.0
+openai==2.38.0
+python-dotenv==1.2.2
+scikit-learn==1.7.1
