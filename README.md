@@ -1,6 +1,6 @@
 If you want the project to feel more real, replace README with this:
 
-# Satyam Chatbot
+# Gaurav Chatbot
 
 A simple local chatbot built with Gradio and OpenAI.
 
