@@ -35,6 +35,7 @@ This chatbot uses:
 - OpenRouter
 - Lightweight RAG
 
-Last updated: May 22
+Last updated: May 22 ( 9:35 PM )
 
-Updated today
+
+
