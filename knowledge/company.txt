@@ -1,0 +1,5 @@
+Gaurav AI is a personal chatbot project built with Gradio, LangChain, OpenRouter, and local retrieval.
+
+The project uses RAG for knowledge lookup.
+
+Future upgrades will include voice input, voice output, multi-file upload, web search, authentication, and deployment.

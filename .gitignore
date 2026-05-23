@@ -1,1 +1,7 @@
+.venv/
+.env
+__pycache__/
+.gradio/
+uploads/
+vectorstore/
 .DS_Store

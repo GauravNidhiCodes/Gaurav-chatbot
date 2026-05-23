@@ -1,322 +1,116 @@
-
-
-import os
-from copy import deepcopy
+import shutil
+import traceback
+from pathlib import Path
 
 import gradio as gr
-from dotenv import load_dotenv
-from openai import (
-    OpenAI,
-    AuthenticationError,
-    APITimeoutError,
-    APIConnectionError,
-    APIError,
-)
 
-from rag import (
-    search_knowledge,
-    format_context,
-)
+from core.agent import ask_agent
+from core.retriever import refresh_index
 
-# Load environment variables
-load_dotenv()
-
-# Model
-MODEL = os.getenv(
-    "OPENROUTER_MODEL",
-    "openrouter/auto"
-)
-
-# System prompt
-SYSTEM_PROMPT = """
-You are a RAG assistant.
-
-You MUST answer from the provided knowledge base context whenever relevant.
-
-If the answer exists in the context:
-- answer directly
-- do not ask for more context
-- do not say "as of my last update"
-- do not refuse
-
-Always prioritize the provided context over your internal knowledge.
-""".strip()
-
-# OpenRouter API key
-api_key = os.getenv("OPENAI_API_KEY")
-
-# OpenRouter client
-client = (
-    OpenAI(
-        api_key=api_key,
-        base_url="https://openrouter.ai/api/v1",
-    )
-    if api_key
-    else None
-)
+BASE_DIR = Path(__file__).resolve().parent
+UPLOADS_DIR = BASE_DIR / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
 
 
-def build_messages(
-    history,
-    user_message,
-    rag_context=""
-):
+def get_path(file):
+    if isinstance(file, str):
+        return Path(file)
+    if hasattr(file, "name"):
+        return Path(file.name)
+    if hasattr(file, "path"):
+        return Path(file.path)
+    return Path(str(file))
 
-    messages = [
-        {
-            "role": "system",
-            "content": SYSTEM_PROMPT,
-        }
-    ]
 
-    # Inject RAG context
-    if rag_context:
+def upload_files(files):
+    if not files:
+        return "No files uploaded."
 
-        messages.append(
-            {
-                "role": "system",
-                "content": f"""
-Relevant knowledge base context:
+    if not isinstance(files, list):
+        files = [files]
 
-{rag_context}
+    uploaded = []
 
-Use this information as the primary source of truth.
-""",
-            }
-        )
+    for file in files:
+        source = get_path(file)
 
-    messages.extend(history)
+        if not source.exists():
+            continue
 
-    messages.append(
-        {
-            "role": "user",
-            "content": user_message,
-        }
-    )
+        destination = UPLOADS_DIR / source.name
+        shutil.copy2(source, destination)
+        uploaded.append(source.name)
 
-    return messages
+    refresh_index()
+
+    if not uploaded:
+        return "No valid files were uploaded."
+
+    return "Uploaded: " + ", ".join(uploaded)
 
 
 def respond(message, history):
-
+    history = history or []
     message = (message or "").strip()
 
-    history = history or []
-
     if not message:
-        return "", history, history
-
-    # Missing API key
-    if client is None:
-
-        new_history = history + [
-            {
-                "role": "user",
-                "content": message,
-            },
-            {
-                "role": "assistant",
-                "content": (
-                    "OpenRouter API key "
-                    "not found in .env file."
-                ),
-            },
-        ]
-
-        snapshot = deepcopy(new_history)
-
-        return "", snapshot, snapshot
-
-    # RAG retrieval
-    hits = search_knowledge(message)
-
-    rag_context = format_context(hits)
-
-    print("\n========== RAG CONTEXT ==========")
-    print(rag_context)
-    print("=================================\n")
-
-    messages = build_messages(
-        history,
-        message,
-        rag_context,
-    )
+        return "", history
 
     try:
-
-        stream = client.chat.completions.create(
-            model=MODEL,
-            messages=messages,
-            stream=True,
-            temperature=0.1,
-            timeout=30.0,
-        )
-
-        new_history = history + [
-            {
-                "role": "user",
-                "content": message,
-            },
-            {
-                "role": "assistant",
-                "content": "",
-            },
-        ]
-
-        snapshot = deepcopy(new_history)
-
-        yield "", snapshot, snapshot
-
-        response_text = ""
-
-        for chunk in stream:
-
-            content = (
-                chunk.choices[0]
-                .delta
-                .content
-                if chunk.choices
-                else None
-            )
-
-            if content:
-
-                response_text += content
-
-                new_history[-1]["content"] = (
-                    response_text
-                )
-
-                snapshot = deepcopy(new_history)
-
-                yield "", snapshot, snapshot
-
-    except AuthenticationError:
-
-        error_text = (
-            "Invalid OpenRouter API key."
-        )
-
-    except APITimeoutError:
-
-        error_text = "Request timed out."
-
-    except APIConnectionError:
-
-        error_text = (
-            "Failed to connect to OpenRouter."
-        )
-
-    except APIError as e:
-
-        error_text = (
-            f"API Error: {str(e)}"
-        )
-
+        answer = ask_agent(message, history)
     except Exception as e:
+        traceback.print_exc()
+        answer = f"Error: {str(e)}"
 
-        error_text = (
-            f"Unexpected Error: {str(e)}"
-        )
+    history.append({"role": "user", "content": message})
+    history.append({"role": "assistant", "content": answer})
 
-    else:
-        return
-
-    new_history = history + [
-        {
-            "role": "user",
-            "content": message,
-        },
-        {
-            "role": "assistant",
-            "content": error_text,
-        },
-    ]
-
-    snapshot = deepcopy(new_history)
-
-    yield "", snapshot, snapshot
+    return "", history
 
 
 with gr.Blocks() as demo:
+    gr.Markdown("# Gaurav AI")
+    gr.Markdown("LangChain + OpenRouter + RAG")
 
-    gr.Markdown(
-        """
-        # AI Chatbot
+    with gr.Row():
+        uploader = gr.File(
+            file_count="multiple",
+            type="filepath",
+            label="Upload Files",
+        )
+        upload_button = gr.Button("Upload")
 
-        A chatbot built with:
-        - Gradio
-        - OpenRouter
-        - Lightweight RAG
-        """
+    upload_status = gr.Textbox(label="Upload Status", interactive=False)
+
+    upload_button.click(
+        upload_files,
+        inputs=uploader,
+        outputs=upload_status,
     )
 
     chatbot = gr.Chatbot(
-        height=500
+        height=520,
+        value=[],
+        label="Chatbot",
     )
 
-    state = gr.State([])
-
-    message_box = gr.Textbox(
-        placeholder=(
-            "Type your message "
-            "and press Enter..."
-        ),
+    message = gr.Textbox(
+        placeholder="Ask something...",
         label="Message",
     )
 
-    with gr.Row():
+    clear = gr.Button("Clear")
 
-        send_button = gr.Button(
-            "Send",
-            variant="primary",
-        )
-
-        clear_button = gr.Button(
-            "Clear"
-        )
-
-    # Enter submit
-    message_box.submit(
+    message.submit(
         respond,
-        inputs=[
-            message_box,
-            state,
-        ],
-        outputs=[
-            message_box,
-            chatbot,
-            state,
-        ],
+        inputs=[message, chatbot],
+        outputs=[message, chatbot],
     )
 
-    # Button submit
-    send_button.click(
-        respond,
-        inputs=[
-            message_box,
-            state,
-        ],
-        outputs=[
-            message_box,
-            chatbot,
-            state,
-        ],
+    clear.click(
+        lambda: ("", []),
+        outputs=[message, chatbot],
     )
 
-    # Clear chat
-    clear_button.click(
-        lambda: ("", [], []),
-        outputs=[
-            message_box,
-            chatbot,
-            state,
-        ],
-    )
-
-# Launch
 if __name__ == "__main__":
-
-    demo.launch(
-        share=True
-    )
+    demo.launch()
