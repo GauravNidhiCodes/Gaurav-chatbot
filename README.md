@@ -1,41 +1,49 @@
-If you want the project to feel more real, replace README with this:
+# Gaurav AI
 
-# Gaurav Chatbot
+Gaurav AI is a local chatbot built with **Gradio**, **LangChain**, **OpenRouter**, and **RAG**.  
+It supports:
 
-A simple local chatbot built with Gradio and OpenAI.
+- Chat interface
+- Multi-file upload
+- PDF, TXT, MD, DOCX support
+- Local knowledge retrieval
+- OpenRouter-based model responses
 
-## Setup
+## Features
 
-1. Create a virtual environment:
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
+- Clean Gradio UI
+- OpenRouter integration
+- Retrieval-Augmented Generation (RAG)
+- Upload files and ask questions from them
+- Works with local knowledge base
+- Modular code structure
 
- 2.  Install dependencies:
-      pip install -r requirements.txt
+## Tech Stack
 
- 
- 3. Create a .env file:
- OPENAI_API_KEY=your_key_here
- OPENAI_MODEL=gpt-4o-mini
-
- 4. Run the app:
- python app.py
-
- ## Notes
-
-- Make sure your OpenAI API key is valid.
-- The chatbot runs locally on your machine.
-- Default model: `gpt-4o-mini`
-
-Project codename is Satyam-X.
-
-This chatbot uses:
+- Python
 - Gradio
+- LangChain
 - OpenRouter
-- Lightweight RAG
+- scikit-learn
+- python-dotenv
+- pypdf
+- python-docx
 
-Last updated: May 22 ( 9:35 PM )
+## Project Structure
 
-
-
+```txt
+Gaurav-chatbot/
+├── app.py
+├── requirements.txt
+├── .env
+├── core/
+│   ├── __init__.py
+│   ├── agent.py
+│   ├── file_loader.py
+│   ├── memory.py
+│   ├── prompts.py
+│   ├── retriever.py
+│   └── tools.py
+├── knowledge/
+├── uploads/
+└── vectorstore/
